@@ -1,0 +1,7 @@
+.cabal-sandbox
+.hpc
+.vscode/*
+!.vscode/settings.json
+cabal.sandbox.config
+*.tix
+dist
