@@ -7,6 +7,9 @@ module Doppler.HTML.Expression (
 import Doppler.HTML.Attribute
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax
+import Data.Text                  (Text, unpack)
+import Data.Text.Encoding         (decodeUtf8)
+import Data.ByteString            (ByteString)
 
 data Expression =
      Element String [Attribute] [Expression]
@@ -35,6 +38,12 @@ instance IsHTML Float where
 
 instance IsHTML Int where
    toExpression = Text . show
+
+instance IsHTML Text where
+   toExpression = Text . unpack
+
+instance IsHTML ByteString where
+   toExpression = toExpression . decodeUtf8
 
 instance IsHTML a => IsHTML [a] where
    toExpression =
