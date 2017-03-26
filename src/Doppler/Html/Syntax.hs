@@ -4,6 +4,7 @@ module Doppler.Html.Syntax (
 
 import Doppler.Html.Types
 import Doppler.Tag.Syntax
+import Doppler.Css.Syntax
 import Text.Parsec
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax
@@ -28,7 +29,10 @@ parseHtml = do
       return $ head tags
 
 -- Parses HTML from string.
-parseHtmlFromString :: String -> Html
+parseHtmlFromString :: String ->
+                       -- ^ String to parse.
+                       Html
+                       -- ^ Parsed Html.
 parseHtmlFromString source =
    case parse parseHtml source source of
       Right x -> x
@@ -67,6 +71,14 @@ parseAttributeValue Unquoted _ =
             x <- optionMaybe (lookAhead $ string "${")
             maybe (noneOf " \"'=<>`") unexpected x)
 
+parseAttributeValue SingleQuotes "style" =
+   -- Use CSS property parser when parsing style attribute value.
+   StyleValue <$> parseCssProperty
+
+parseAttributeValue DoubleQuotes "style" =
+   -- Use CSS property parser when parsing style attribute value.
+   StyleValue <$> parseCssProperty
+
 parseAttributeValue SingleQuotes _ =
    -- Attribute value must not contain any literal U+0027 APOSTROPHE
    -- characters ('), and must not be the empty string.
@@ -94,6 +106,10 @@ parseAttributeValue DoubleQuotes _ =
             maybe (noneOf "\"") unexpected x)
 
 parseContent :: TagName -> Parser HtmlContent
+parseContent "style" =
+   -- Use CSS parser when parsing style tag contents.
+   Style <$> parseCss
+
 parseContent _ =
    -- The text in raw text and escapable raw text elements must not
    -- contain any occurrences of the string "</" (U+003C LESS-THAN SIGN,

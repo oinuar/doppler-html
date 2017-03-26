@@ -4,6 +4,7 @@ module Doppler.Html.SyntaxSpec where
 
 import Test.Hspec
 import Doppler.Html.Types
+import qualified Doppler.Css.Types as Css
 import Doppler.Html.Syntax
 import Language.Haskell.TH.Syntax (lift)
 
@@ -114,6 +115,15 @@ spec = do
          parseHtmlFromString "<html key=\"hello ${name}\" />" `shouldBe`
             ShortTag "html" [("key", [Value "hello ", InterpolationValue (lift "")])]
 
+   describe "CSS integration" $ do
+      it "parses CSS in style double quoted attribute for root element" $
+         parseHtmlFromString "<html style=\"text-align: center;\" />" `shouldBe`
+            ShortTag "html" [("style", [StyleValue ("text-align", [Css.Value "center"])])]
+
+      it "parses CSS in style single quoted attribute for root element" $
+         parseHtmlFromString "<html style='text-align: center;' />" `shouldBe`
+            ShortTag "html" [("style", [StyleValue ("text-align", [Css.Value "center"])])]
+
    describe "Content" $ do
       it "parses root element with text content" $
          parseHtmlFromString "<html>text content</html>" `shouldBe`
@@ -167,3 +177,7 @@ spec = do
       it "applies string interpolation for root element attribute and quotes double quotes" $
          let bar = "he said \"get over it\"" in ([html|<html attr="${bar}" />|] :: Html) `shouldBe`
             ShortTag "html" [("attr", [Value "he said &quot;get over it&quot;"])]
+
+      it "applies style interpolation for root element unquoted style attribute" $
+         let bar = StyleValue ("font-size", [Css.Value "12px"]) in ([html|<html style=${bar} />|] :: Html) `shouldBe`
+            ShortTag "html" [("style", [StyleValue ("font-size", [Css.Value "12px"])])]
