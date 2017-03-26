@@ -16,10 +16,10 @@ extra-source-files:  ChangeLog.md README.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Doppler.HTML.Expression,
-                       Doppler.HTML.Syntax,
-                       Doppler.HTML.Types,
-                       Doppler.HTML.Attribute
+  exposed-modules:     Doppler.Html.Syntax,
+                       Doppler.Html.Types,
+                       Doppler.Tag.Types,
+                       Doppler.Tag.Syntax
   -- other-modules:
   other-extensions:    TemplateHaskell,
                        QuasiQuotes
@@ -41,6 +41,7 @@ test-suite doppler-html-spec
    build-depends:       doppler-html,
                         doppler-css,
                         base >=4.9 && <4.10,
+                        template-haskell >=2.11 && <2.12,
                         hspec >=2 && <3
    hs-source-dirs:      test
    default-language:    Haskell2010
