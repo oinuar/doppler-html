@@ -19,7 +19,7 @@ parseTag :: Parser TagName ->
             Parser [Tag (k, [v]) c]
             -- ^ Tag structure parser.
 parseTag tagName attrName attrValue content = do
-   _ <- many parseWhitespace *> char '<'
+   _ <- try $ many parseWhitespace *> char '<'
    name <- tagName <* many parseWhitespace
    attributes <- parseAttribute attrName attrValue `sepEndBy` many1 parseWhitespace
    closing <- (string "/>" <|> string ">") <* many parseWhitespace
@@ -73,4 +73,4 @@ parseContent content name = do
 
 parseWhitespace :: Parser Char
 parseWhitespace =
-   oneOf "\t\n\r "
+   space <|> tab <|> newline

@@ -106,9 +106,9 @@ parseAttributeValue DoubleQuotes _ =
             maybe (noneOf "\"") unexpected x)
 
 parseContent :: TagName -> Parser HtmlContent
-parseContent "style" =
+{-parseContent "style" =
    -- Use CSS parser when parsing style tag contents.
-   Style <$> parseCss
+   Style <$> parseCss-}
 
 parseContent _ =
    -- The text in raw text and escapable raw text elements must not
@@ -118,13 +118,13 @@ parseContent _ =
    -- TABULATION (tab), U+000A LINE FEED (LF), U+000C FORM FEED (FF), U+000D
    -- CARRIAGE RETURN (CR), U+0020 SPACE, U+003E GREATER-THAN SIGN (>), or
    -- U+002F SOLIDUS (/).
-   interpolation <|> text
+   interpolation <|> plain
    where
       interpolation =
          Interpolation <$> parseInterpolationExpr
 
-      text =
-         Text <$> manyTill anyChar (lookAhead $ tag <|> string "${")
+      plain =
+         Plain <$> manyTill anyChar (lookAhead $ tag <|> string "${")
 
       tag = do
          _ <- char '<'

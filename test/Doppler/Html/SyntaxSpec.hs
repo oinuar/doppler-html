@@ -18,6 +18,10 @@ spec = do
          parseHtmlFromString "<html/>" `shouldBe`
             ShortTag "html" []
 
+      it "parses short closed spaced root element" $
+         parseHtmlFromString " <html/> " `shouldBe`
+            ShortTag "html" []
+
       it "parses spaced short closed root element" $
          parseHtmlFromString "<html />" `shouldBe`
             ShortTag "html" []
@@ -127,15 +131,19 @@ spec = do
    describe "Content" $ do
       it "parses root element with text content" $
          parseHtmlFromString "<html>text content</html>" `shouldBe`
-            FullTag "html" [] [Content $ Text "text content"]
+            FullTag "html" [] [Content $ Plain "text content"]
+
+      it "parses root element with spaced text content" $
+         parseHtmlFromString "<html> text content </html>" `shouldBe`
+            FullTag "html" [] [Content $ Plain " text content "]
 
       it "parses root element with text and element content" $
          parseHtmlFromString "<html>text <b>content</b></html>" `shouldBe`
-            FullTag "html" [] [Content $ Text "text ", FullTag "b" [] [Content $ Text "content"]]
+            FullTag "html" [] [Content $ Plain "text ", FullTag "b" [] [Content $ Plain "content"]]
 
       it "parses root element with text and dangling element content" $
          parseHtmlFromString "<html>text <br>more</html>" `shouldBe`
-            FullTag "html" [] [Content $ Text "text ", DanglingTag "br" [], Content $ Text "more"]
+            FullTag "html" [] [Content $ Plain "text ", DanglingTag "br" [], Content $ Plain "more"]
 
       it "parses interpolation inside root element" $
          parseHtmlFromString "<html>${interpolation}</html>" `shouldBe`
@@ -143,28 +151,32 @@ spec = do
 
       it "parses interpolation within text inside root element" $
          parseHtmlFromString "<html>Hello, ${interpolation}!</html>" `shouldBe`
-            FullTag "html" [] [Content $ Text "Hello, ", Content $ Interpolation (lift ""), Content $ Text "!"]
+            FullTag "html" [] [Content $ Plain "Hello, ", Content $ Interpolation (lift ""), Content $ Plain "!"]
+
+      it "parses interpolation within text with space at the end inside root element" $
+         parseHtmlFromString "<html>Hello, ${interpolation} mate!</html>" `shouldBe`
+            FullTag "html" [] [Content $ Plain "Hello, ", Content $ Interpolation (lift ""), Content $ Plain " mate!"]
 
    describe "Quasiquotes" $ do
       it "applies string interpolation inside root element" $
          let foo = "bar" in ([html|<html>${foo}</html>|] :: Html) `shouldBe`
-            FullTag "html" [] [Content $ Text "bar"]
+            FullTag "html" [] [Content $ Plain "bar"]
 
       it "applies string interpolation inside root element and quotes html" $
          let foo = "eskimo < ben & jerry's" in ([html|<html>${foo}</html>|] :: Html) `shouldBe`
-            FullTag "html" [] [Content $ Text "eskimo &lt; ben &amp; jerry's"]
+            FullTag "html" [] [Content $ Plain "eskimo &lt; ben &amp; jerry's"]
 
       it "applies string interpolation within text inside root element" $
          let name = "Maija" in ([html|<html>Hello ${name}!</html>|] :: Html) `shouldBe`
-            FullTag "html" [] [Content $ Text "Hello ", Content $ Text "Maija", Content $ Text "!"]
+            FullTag "html" [] [Content $ Plain "Hello ", Content $ Plain "Maija", Content $ Plain "!"]
 
       it "applies string interpolation within text inside root element" $
          let name = "Maija" in ([html|<html>Hello ${name}!</html>|] :: Html) `shouldBe`
-            FullTag "html" [] [Content $ Text "Hello ", Content $ Text "Maija", Content $ Text "!"]
+            FullTag "html" [] [Content $ Plain "Hello ", Content $ Plain "Maija", Content $ Plain "!"]
 
       it "applies integer interpolation inside root element" $
          let foo = 42 :: Int in ([html|<html>${foo}</html>|] :: Html) `shouldBe`
-            FullTag "html" [] [Content $ Text "42"]
+            FullTag "html" [] [Content $ Plain "42"]
 
       it "applies string interpolation for root element attribute" $
          let bar = "bar" in ([html|<html attr=foo${bar} />|] :: Html) `shouldBe`
@@ -181,3 +193,11 @@ spec = do
       it "applies style interpolation for root element unquoted style attribute" $
          let bar = StyleValue ("font-size", [Css.Value "12px"]) in ([html|<html style=${bar} />|] :: Html) `shouldBe`
             ShortTag "html" [("style", [StyleValue ("font-size", [Css.Value "12px"])])]
+
+      it "applies multiline interpolation" $
+         let content = "foobar" in ([html|
+            <body>
+               ${content}
+            </body>
+         |] :: Html) `shouldBe`
+            FullTag "body" [] [Content $ Plain "foobar"]

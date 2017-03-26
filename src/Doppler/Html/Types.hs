@@ -9,6 +9,9 @@ import Doppler.Tag.Types
 import qualified Doppler.Css.Types as Css
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax
+import Data.Text                      (Text, unpack)
+import Data.Text.Encoding             (decodeUtf8)
+import Data.ByteString                (ByteString)
 
 type HtmlAttributeName = String
 type HtmlAttribute = (HtmlAttributeName, [HtmlAttributeValue])
@@ -16,7 +19,7 @@ type HtmlTagName = TagName
 type Html = Tag HtmlAttribute HtmlContent
 
 data HtmlContent =
-     Text String
+     Plain String
    -- ^ Ordinary text content.
    | Style Css.Css
    -- ^ Style content.
@@ -40,19 +43,19 @@ class IsHtmlAttribute a where
 
 instance Monoid HtmlContent where
    mempty =
-      Text mempty
+      Plain mempty
 
-   mappend (Text lhs) (Text rhs) =
-      Text $ lhs `mappend` rhs
+   mappend (Plain lhs) (Plain rhs) =
+      Plain $ lhs `mappend` rhs
 
    mappend (Style lhs) (Style rhs) =
       Style $ lhs `mappend` rhs
 
    mappend lhs@(Interpolation _) (Interpolation _) =
-      Text $ show lhs
+      Plain $ show lhs
 
    mappend lhs rhs =
-      Text $ show lhs `mappend` show rhs
+      Plain $ show lhs `mappend` show rhs
 
 
 instance Monoid HtmlAttributeValue where
@@ -97,10 +100,16 @@ instance IsHtmlContent Int where
    formatHtml = formatHtml . show
 
 instance IsHtmlContent Char where
-   formatHtml '<' = Text "&lt;"
-   formatHtml '>' = Text "&gt;"
-   formatHtml '&' = Text "&amp;"
-   formatHtml value = Text [value]
+   formatHtml '<' = Plain "&lt;"
+   formatHtml '>' = Plain "&gt;"
+   formatHtml '&' = Plain "&amp;"
+   formatHtml value = Plain [value]
+
+instance IsHtmlContent Text where
+   formatHtml = formatHtml . unpack
+
+instance IsHtmlContent ByteString where
+   formatHtml = formatHtml . decodeUtf8
 
 instance IsHtmlContent a => IsHtmlContent [a] where
    formatHtml = mconcat . map formatHtml
@@ -127,12 +136,18 @@ instance IsHtmlAttribute Char where
    formatAttribute '\'' = Value "&apos;"
    formatAttribute value = Value [value]
 
+instance IsHtmlAttribute Text where
+   formatAttribute = formatAttribute . unpack
+
+instance IsHtmlAttribute ByteString where
+   formatAttribute = formatAttribute . decodeUtf8
+
 instance IsHtmlAttribute a => IsHtmlAttribute [a] where
    formatAttribute = mconcat . map formatAttribute
 
 
 instance Show HtmlContent where
-   show (Text content) =
+   show (Plain content) =
       show content
 
    show (Style content) =
@@ -142,7 +157,7 @@ instance Show HtmlContent where
       "${..}"
 
 instance Eq HtmlContent where
-   (==) (Text lhs) (Text rhs) =
+   (==) (Plain lhs) (Plain rhs) =
       lhs == rhs
 
    (==) (Style lhs) (Style rhs) =
@@ -156,8 +171,8 @@ instance Eq HtmlContent where
 
 instance Lift HtmlContent where
    -- This comes directly from parser, no need to format.
-   lift (Text content) =
-      [| Text content |]
+   lift (Plain content) =
+      [| Plain content |]
 
    lift (Style content) =
       [| Style content |]
