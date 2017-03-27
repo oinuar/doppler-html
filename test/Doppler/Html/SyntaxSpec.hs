@@ -137,9 +137,17 @@ spec = do
          parseHtmlFromString "<html> text content </html>" `shouldBe`
             FullTag "html" [] [Content $ Plain " text content "]
 
+      it "parses root element with multi-spaced text content to be equal with one spaced" $
+         parseHtmlFromString "<html>      text  content    </html>" `shouldBe`
+            FullTag "html" [] [Content $ Plain " text content "]
+
       it "parses root element with text and element content" $
          parseHtmlFromString "<html>text <b>content</b></html>" `shouldBe`
             FullTag "html" [] [Content $ Plain "text ", FullTag "b" [] [Content $ Plain "content"]]
+
+      it "parses root element with text and element content with spaces" $
+         parseHtmlFromString "<html>  text  <b>  content </b>   </html>" `shouldBe`
+            FullTag "html" [] [Content $ Plain " text ", FullTag "b" [] [Content $ Plain " content "], Content $ Plain " "]
 
       it "parses root element with text and dangling element content" $
          parseHtmlFromString "<html>text <br>more</html>" `shouldBe`
@@ -200,4 +208,4 @@ spec = do
                ${content}
             </body>
          |] :: Html) `shouldBe`
-            FullTag "body" [] [Content $ Plain "foobar"]
+            FullTag "body" [] [Content $ Plain "\n", Content $ Plain "foobar", Content $ Plain "\n"]

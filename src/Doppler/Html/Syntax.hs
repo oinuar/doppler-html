@@ -11,7 +11,7 @@ import Language.Haskell.TH.Syntax
 import Doppler.Tag.Types          (Quote (..))
 import Text.Parsec.String         (Parser)
 import Language.Haskell.TH.Quote  (QuasiQuoter (..))
-import Control.Monad              (when)
+import Data.Maybe                 (maybeToList)
 
 -- HTML tree structure parser.
 parseHtml :: Parser Html
@@ -21,6 +21,7 @@ parseHtml = do
                     parseAttributeName
                     parseAttributeValue
                     parseContent
+                    parseWhitespace
 
    if null tags || length tags > 1 then
       unexpected "source must contain exactly one root \
@@ -124,14 +125,24 @@ parseContent _ =
          Interpolation <$> parseInterpolationExpr
 
       plain =
-         Plain <$> manyTill anyChar (lookAhead $ tag <|> string "${")
+         Plain <$> many1 (parseBreakingSpace <|> notTagOrInterpolation)
+
+      notTagOrInterpolation = do
+         x <- optionMaybe (lookAhead $ tag <|> string "${")
+         maybe anyChar unexpected x
 
       tag = do
-         _ <- char '<'
-         _ <- optional $ char '/'
-         _ <- parseTagName
-         _ <- oneOf "\t\n>/"
-         return mempty
+         a <- char '<'
+         b <- optionMaybe $ char '/'
+         c <- parseTagName
+         d <- parseWhitespace <|> maybe (oneOf "/>") (const $ char '>') b
+         return $ [a] ++ maybeToList b ++ c ++ [d]
+
+parseBreakingSpace :: Parser Char
+parseBreakingSpace = do
+   c <- parseWhitespace
+   skipMany parseWhitespace
+   return c
 
 -- | Quasiquoter for HTML syntax.
 html :: QuasiQuoter
@@ -155,3 +166,7 @@ mkQExp =
 parseInterpolationExpr :: Parser (Q Exp)
 parseInterpolationExpr =
    mkQExp <$> between (string "${") (char '}') (many1 $ noneOf "}")
+
+parseWhitespace :: Parser Char
+parseWhitespace =
+   space <|> tab <|> endOfLine
