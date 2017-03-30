@@ -107,9 +107,9 @@ parseAttributeValue DoubleQuotes _ =
             maybe (noneOf "\"") unexpected x)
 
 parseContent :: TagName -> Parser HtmlContent
-{-parseContent "style" =
+parseContent "style" =
    -- Use CSS parser when parsing style tag contents.
-   Style <$> parseCss-}
+   Style <$> many1 parseCss
 
 parseContent _ =
    -- The text in raw text and escapable raw text elements must not

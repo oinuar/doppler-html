@@ -128,6 +128,10 @@ spec = do
          parseHtmlFromString "<html style='text-align: center;' />" `shouldBe`
             ShortTag "html" [("style", [StyleValue ("text-align", [Css.Value "center"])])]
 
+      it "parses CSS style tag" $
+         parseHtmlFromString "<style>div { text-align: center; }</style>" `shouldBe`
+            FullTag "style" [] [Content $ Style [Css.Block "div" [("text-align", [Css.Value "center"])]]]
+
    describe "Content" $ do
       it "parses root element with text content" $
          parseHtmlFromString "<html>text content</html>" `shouldBe`

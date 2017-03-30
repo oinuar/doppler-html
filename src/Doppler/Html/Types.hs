@@ -21,7 +21,7 @@ type Html = Tag HtmlAttribute HtmlContent
 data HtmlContent =
      Plain String
    -- ^ Ordinary text content.
-   | Style Css.Css
+   | Style [Css.Css]
    -- ^ Style content.
    | Interpolation (Q Exp)
    -- ^ Interpolated content that contains Haskell expression.
