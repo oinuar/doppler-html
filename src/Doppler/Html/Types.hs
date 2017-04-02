@@ -21,6 +21,8 @@ type Html = Tag HtmlAttribute HtmlContent
 data HtmlContent =
      Plain String
    -- ^ Ordinary text content.
+   | BreakingSpace
+   -- ^ Breaking space content.
    | Style [Css.Css]
    -- ^ Style content.
    | Interpolation (Q Exp)
@@ -50,6 +52,9 @@ instance Monoid HtmlContent where
 
    mappend (Style lhs) (Style rhs) =
       Style $ lhs `mappend` rhs
+
+   mappend BreakingSpace BreakingSpace =
+      BreakingSpace
 
    mappend lhs@(Interpolation _) (Interpolation _) =
       Plain $ show lhs
@@ -150,6 +155,9 @@ instance Show HtmlContent where
    show (Plain content) =
       show content
 
+   show BreakingSpace =
+      "BreakingSpace"
+
    show (Style content) =
       show content
 
@@ -159,6 +167,9 @@ instance Show HtmlContent where
 instance Eq HtmlContent where
    (==) (Plain lhs) (Plain rhs) =
       lhs == rhs
+
+   (==) BreakingSpace BreakingSpace =
+      True
 
    (==) (Style lhs) (Style rhs) =
       lhs == rhs
@@ -173,6 +184,9 @@ instance Lift HtmlContent where
    -- This comes directly from parser, no need to format.
    lift (Plain content) =
       [| Plain content |]
+
+   lift BreakingSpace =
+      [| BreakingSpace |]
 
    lift (Style content) =
       [| Style content |]

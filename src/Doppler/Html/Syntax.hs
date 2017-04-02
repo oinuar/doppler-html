@@ -119,16 +119,21 @@ parseContent _ =
    -- TABULATION (tab), U+000A LINE FEED (LF), U+000C FORM FEED (FF), U+000D
    -- CARRIAGE RETURN (CR), U+0020 SPACE, U+003E GREATER-THAN SIGN (>), or
    -- U+002F SOLIDUS (/).
-   interpolation <|> plain
+   interpolation <|> breakingSpace <|> plain
    where
       interpolation =
          Interpolation <$> parseInterpolationExpr
 
-      plain =
-         Plain <$> many1 (parseBreakingSpace <|> notTagOrInterpolation)
+      breakingSpace = do
+         _ <- parseWhitespace
+         skipMany parseWhitespace
+         return BreakingSpace
 
-      notTagOrInterpolation = do
-         x <- optionMaybe (lookAhead $ tag <|> string "${")
+      plain =
+         Plain <$> many1 plainChar
+
+      plainChar = do
+         x <- optionMaybe (lookAhead $ (pure <$> parseWhitespace) <|> tag <|> string "${")
          maybe anyChar unexpected x
 
       tag = do
@@ -137,12 +142,6 @@ parseContent _ =
          c <- parseTagName
          d <- parseWhitespace <|> maybe (oneOf "/>") (const $ char '>') b
          return $ [a] ++ maybeToList b ++ c ++ [d]
-
-parseBreakingSpace :: Parser Char
-parseBreakingSpace = do
-   c <- parseWhitespace
-   skipMany parseWhitespace
-   return c
 
 -- | Quasiquoter for HTML syntax.
 html :: QuasiQuoter
