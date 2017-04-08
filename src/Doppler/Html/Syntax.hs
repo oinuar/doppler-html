@@ -25,7 +25,7 @@ parseHtml = do
 
    return $ case tags of
       [x] -> Html x
-      xs -> HtmlSiblings xs
+      xs -> HtmlSiblings $ map Html xs
 
 -- Parses HTML from string.
 parseHtmlFromString :: String ->
