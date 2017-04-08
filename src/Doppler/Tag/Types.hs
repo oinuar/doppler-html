@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell, QuasiQuotes #-}
 
 module Doppler.Tag.Types (
-   TagName, Tag (..), Quote (..), getTagName
+   TagName, Tag (..), Quote (..), TagContent (..), getTagName
 ) where
 
 import Language.Haskell.TH
@@ -26,9 +26,14 @@ data Quote =
    | DoubleQuotes
    deriving (Show, Eq)
 
-instance (Lift a, Lift b) => Lift (Tag a b) where
+class TagContent b where
+   liftContent :: b -> Q Exp
+
+instance (Lift a, Lift b, TagContent b) => Lift (Tag a b) where
    lift (FullTag name attributes children) =
-      [| FullTag name attributes children |]
+      let childs = ListE <$> mapM explodeTree children
+          concatChilds = appE [| concat |] childs
+      in appE [| FullTag name attributes |] concatChilds
 
    lift (DanglingTag name attributes) =
       [| DanglingTag name attributes |]
@@ -55,7 +60,7 @@ getTagName (ShortTag name _) =
    name
 
 getTagName (Content _) =
-   error "Content has no tag name"
+   mempty
 
 -- Gets an attribute list for tag.
 getAttributes :: Tag a b ->
@@ -74,3 +79,10 @@ getAttributes (ShortTag _ attr) =
 
 getAttributes _ =
    []
+
+explodeTree :: (Lift a, Lift b, TagContent b) => Tag a b -> Q Exp
+explodeTree (Content content) =
+   liftContent content
+
+explodeTree tag =
+   appE [| (:[]) |] $ lift tag

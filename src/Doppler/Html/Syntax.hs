@@ -1,5 +1,5 @@
 module Doppler.Html.Syntax (
-   parseHtml, parseHtmlFromString, html
+   parseHtml, parseHtmlFromString, html, style
 ) where
 
 import Doppler.Html.Types
@@ -23,11 +23,9 @@ parseHtml = do
                     parseContent
                     parseWhitespace
 
-   if null tags || length tags > 1 then
-      unexpected "source must contain exactly one root \
-                  \tag that encloses all other tags"
-   else
-      return $ head tags
+   return $ case tags of
+      [x] -> Html x
+      xs -> HtmlSiblings xs
 
 -- Parses HTML from string.
 parseHtmlFromString :: String ->
@@ -146,15 +144,30 @@ parseContent _ =
 -- | Quasiquoter for HTML syntax.
 html :: QuasiQuoter
 html = QuasiQuoter {
-   quoteExp = compileExpression,
+   quoteExp = compileHtmlExpression,
    quotePat = undefined,
    quoteType = undefined,
    quoteDec = undefined
 }
 
-compileExpression :: String -> Q Exp
-compileExpression str =
+-- | Quasiquoter for CSS style properties.
+style :: QuasiQuoter
+style = QuasiQuoter {
+   quoteExp = compileStyleExpression,
+   quotePat = undefined,
+   quoteType = undefined,
+   quoteDec = undefined
+}
+
+compileHtmlExpression :: String -> Q Exp
+compileHtmlExpression str =
    case parse parseHtml str str of
+      Right x -> lift x
+      Left err -> fail $ show err
+
+compileStyleExpression :: String -> Q Exp
+compileStyleExpression str =
+   case parse (many parseCssProperty) str str of
       Right x -> lift x
       Left err -> fail $ show err
 
