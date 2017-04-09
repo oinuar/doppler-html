@@ -15,13 +15,14 @@ import Data.Text.Encoding           (decodeUtf8)
 import Data.ByteString              (ByteString)
 
 type HtmlAttributeName = String
-type HtmlAttribute = (HtmlAttributeName, [HtmlAttributeValue])
+type HtmlAttribute = (HtmlAttributeName, HtmlAttributeValues)
 type HtmlTagName = TagName
+newtype HtmlAction = HtmlAction (Event -> IO ())
+
 data Html =
      Html (Tag HtmlAttribute HtmlContent)
    | HtmlSiblings [Html]
    deriving (Show, Eq)
-newtype HtmlAction = HtmlAction (Event -> IO ())
 
 data HtmlContent =
      Plain String
@@ -30,7 +31,7 @@ data HtmlContent =
    -- ^ Breaking space content.
    | Style [Css.Css]
    -- ^ Style content.
-   | Interpolation (Q Exp)
+   | Interpolation ExpQ
    -- ^ Interpolated content that contains Haskell expression.
 
 data HtmlAttributeValue =
@@ -40,8 +41,13 @@ data HtmlAttributeValue =
    -- ^ Style value.
    | EventValue HtmlAction
    -- ^ Event value that contains an action.
-   | InterpolationValue (Q Exp)
-   -- ^ Interpolated value that contains Haskell expression.
+   deriving (Show, Eq)
+
+data HtmlAttributeValues =
+      AttributeValues [HtmlAttributeValue]
+   -- ^ Ordinary attribute values.
+   | InterpolationAttribute ExpQ
+   -- ^ Interpolated attribute that contains Haskell expression.
 
 class IsHtml a where
    formatHtml :: a -> Html
@@ -50,8 +56,10 @@ class IsHtmlContent a where
    formatHtmlContent :: a -> HtmlContent
 
 class IsHtmlAttribute a where
-   formatAttribute :: a -> HtmlAttributeValue
+   formatHtmlAttribute :: a -> HtmlAttributeValues
 
+class IsHtmlAttributeValue a where
+   formatHtmlAttributeValue :: a -> HtmlAttributeValue
 
 instance Monoid HtmlContent where
    mempty =
@@ -66,12 +74,59 @@ instance Monoid HtmlContent where
    mappend BreakingSpace BreakingSpace =
       BreakingSpace
 
-   mappend lhs@(Interpolation _) (Interpolation _) =
-      Plain $ show lhs
+   mappend (Plain "") rhs =
+      rhs
+
+   mappend lhs (Plain "") =
+      lhs
+
+   mappend lhs (Interpolation rhs) =
+      let lhs' = lift lhs
+          rhs' = appE [| formatHtmlContent |] rhs
+      in Interpolation $ appE (appE [| mappend |] lhs') rhs'
+
+   mappend (Interpolation lhs) rhs =
+      let lhs' = appE [| formatHtmlContent |] lhs
+          rhs' = lift rhs
+      in Interpolation $ appE (appE [| mappend |] lhs') rhs'
 
    mappend lhs rhs =
-      Plain $ show lhs `mappend` show rhs
+      error $ "Incompatible constructs for content: " ++ show lhs ++ " and " ++ show rhs
 
+instance Monoid HtmlAttributeValues where
+   mempty =
+      AttributeValues []
+
+   -- Merge values inside attributes.
+   mappend (AttributeValues (x@Value{} : xs)) (AttributeValues (y@Value{} : ys)) =
+                AttributeValues [x `mappend` y]
+      `mappend` AttributeValues xs
+      `mappend` AttributeValues ys
+
+   -- Join event actions inside attributes.
+   mappend (AttributeValues (x@EventValue{} : xs)) (AttributeValues (y@EventValue{} : ys)) =
+                AttributeValues [x `mappend` y]
+      `mappend` AttributeValues xs
+      `mappend` AttributeValues ys
+
+   -- Do a high level attribute merge.
+   mappend (AttributeValues lhs) (AttributeValues rhs) =
+      AttributeValues $ lhs `mappend` rhs
+
+   mappend (InterpolationAttribute lhs) (InterpolationAttribute rhs) =
+      let lhs' = appE [| formatHtmlAttribute |] lhs
+          rhs' = appE [| formatHtmlAttribute |] rhs
+      in InterpolationAttribute $ appE (appE [| mappend |] lhs') rhs'
+
+   mappend lhs@AttributeValues{} (InterpolationAttribute rhs) =
+      let lhs' = lift lhs
+          rhs' = appE [| formatHtmlAttribute |] rhs
+      in InterpolationAttribute $ appE (appE [| mappend |] lhs') rhs'
+
+   mappend (InterpolationAttribute lhs) rhs@AttributeValues{} =
+      let lhs' = appE [| formatHtmlAttribute |] lhs
+          rhs' = lift rhs
+      in InterpolationAttribute $ appE (appE [| mappend |] lhs') rhs'
 
 instance Monoid HtmlAttributeValue where
    mempty =
@@ -80,27 +135,18 @@ instance Monoid HtmlAttributeValue where
    mappend (Value lhs) (Value rhs) =
       Value $ lhs `mappend` rhs
 
-   mappend (StyleValue (Css.CssProperty (lhsName, lhsProps))) (StyleValue (Css.CssProperty (rhsName, rhsProps)))
-      | lhsName == rhsName =
-         StyleValue $ Css.CssProperty (lhsName, lhsProps `mappend` rhsProps)
-      | otherwise =
-         StyleValue $ Css.CssProperty (lhsName, lhsProps)
-
-   mappend (Value lhs) (StyleValue rhs) =
-      Value $ lhs `mappend` show rhs
-
    mappend (EventValue lhs) (EventValue rhs) =
       EventValue . HtmlAction $ \event ->
          do { runAction lhs event; runAction rhs event }
 
-   mappend (StyleValue lhs) (Value rhs) =
-      Value $ show lhs `mappend` rhs
+   mappend (Value "") rhs =
+      rhs
 
-   mappend lhs@(InterpolationValue _) (InterpolationValue _) =
-      Value $ show lhs
+   mappend lhs (Value "") =
+      lhs
 
    mappend lhs rhs =
-      Value $ show lhs `mappend` show rhs
+      error $ "Incompatible constructs for attribute: " ++ show lhs ++ " and " ++ show rhs
 
 
 instance TagContent HtmlContent where
@@ -173,46 +219,121 @@ instance IsHtmlContent a => IsHtmlContent [a] where
    formatHtmlContent = mconcat . map formatHtmlContent
 
 
+instance IsHtmlAttributeValue HtmlAttributeValue where
+   formatHtmlAttributeValue = id
+
+instance IsHtmlAttributeValue Bool where
+   formatHtmlAttributeValue = formatHtmlAttributeValue . show
+
+instance IsHtmlAttributeValue Double where
+   formatHtmlAttributeValue = formatHtmlAttributeValue . show
+
+instance IsHtmlAttributeValue Float where
+   formatHtmlAttributeValue = formatHtmlAttributeValue . show
+
+instance IsHtmlAttributeValue Int where
+   formatHtmlAttributeValue = formatHtmlAttributeValue . show
+
+instance IsHtmlAttributeValue Char where
+   formatHtmlAttributeValue '&' = Value "&amp;"
+   formatHtmlAttributeValue '"' = Value "&quot;"
+   formatHtmlAttributeValue '\'' = Value "&apos;"
+   formatHtmlAttributeValue value = Value [value]
+
+instance IsHtmlAttributeValue Text where
+   formatHtmlAttributeValue = formatHtmlAttributeValue . unpack
+
+instance IsHtmlAttributeValue ByteString where
+   formatHtmlAttributeValue = formatHtmlAttributeValue . decodeUtf8
+
+instance IsHtmlAttributeValue HtmlAction where
+   formatHtmlAttributeValue = formatHtmlAttributeValue . EventValue
+
+instance IsHtmlAttributeValue Css.CssProperty where
+   formatHtmlAttributeValue = formatHtmlAttributeValue . StyleValue
+
+instance IsHtmlAttributeValue a => IsHtmlAttributeValue [a] where
+   formatHtmlAttributeValue = mconcat . map formatHtmlAttributeValue
+
+
+instance IsHtmlAttribute HtmlAttributeValues where
+   formatHtmlAttribute = id
+
 instance IsHtmlAttribute HtmlAttributeValue where
-   formatAttribute = id
+   formatHtmlAttribute = AttributeValues . pure
 
 instance IsHtmlAttribute Bool where
-   formatAttribute = formatAttribute . show
+   formatHtmlAttribute = formatHtmlAttribute . formatHtmlAttributeValue
 
 instance IsHtmlAttribute Double where
-   formatAttribute = formatAttribute . show
+   formatHtmlAttribute = formatHtmlAttribute . formatHtmlAttributeValue
 
 instance IsHtmlAttribute Float where
-   formatAttribute = formatAttribute . show
+   formatHtmlAttribute = formatHtmlAttribute . formatHtmlAttributeValue
 
 instance IsHtmlAttribute Int where
-   formatAttribute = formatAttribute . show
+   formatHtmlAttribute = formatHtmlAttribute . formatHtmlAttributeValue
 
 instance IsHtmlAttribute Char where
-   formatAttribute '&' = Value "&amp;"
-   formatAttribute '"' = Value "&quot;"
-   formatAttribute '\'' = Value "&apos;"
-   formatAttribute value = Value [value]
+   formatHtmlAttribute = formatHtmlAttribute . formatHtmlAttributeValue
 
 instance IsHtmlAttribute Text where
-   formatAttribute = formatAttribute . unpack
+   formatHtmlAttribute = formatHtmlAttribute . formatHtmlAttributeValue
 
 instance IsHtmlAttribute ByteString where
-   formatAttribute = formatAttribute . decodeUtf8
+   formatHtmlAttribute = formatHtmlAttribute . formatHtmlAttributeValue
 
 instance IsHtmlAttribute HtmlAction where
-   formatAttribute = EventValue
+   formatHtmlAttribute = formatHtmlAttribute . formatHtmlAttributeValue
 
 instance IsHtmlAttribute Css.CssProperty where
-   formatAttribute = StyleValue
+   formatHtmlAttribute = formatHtmlAttribute . formatHtmlAttributeValue
 
 instance IsHtmlAttribute a => IsHtmlAttribute [a] where
-   formatAttribute = mconcat . map formatAttribute
+   formatHtmlAttribute = mconcat . map formatHtmlAttribute
 
 
 instance Lift Html where
    lift (Html tag) =
       [| Html tag |]
+
+   lift (HtmlSiblings tags) =
+      [| HtmlSiblings tags |]
+
+instance Lift HtmlAttributeValue where
+   -- This comes directly from parser, no need to format.
+   lift (Value content) =
+      [| Value content |]
+
+   lift (StyleValue content) =
+      [| StyleValue content |]
+
+   lift (EventValue _) =
+      error "EventValues cannot be lifted"
+
+instance Lift HtmlContent where
+   -- This comes directly from parser, no need to format.
+   lift (Plain content) =
+      [| Plain content |]
+
+   lift BreakingSpace =
+      [| BreakingSpace |]
+
+   lift (Style content) =
+      [| Style content |]
+
+   -- This is evaluated Haskell syntax that parser has not seen, need to format.
+   lift (Interpolation expression) =
+      appE [| formatHtmlContent |] expression
+
+instance Lift HtmlAttributeValues where
+   -- This comes directly from parser, no need to format.
+   lift (AttributeValues values) =
+      [| AttributeValues values |]
+
+   -- This is evaluated Haskell syntax that parser has not seen, need to format.
+   lift (InterpolationAttribute expression) =
+      appE [| formatHtmlAttribute |] expression
 
 
 instance Show HtmlContent where
@@ -244,62 +365,30 @@ instance Eq HtmlContent where
    (==) _ _ =
       False
 
-instance Lift HtmlContent where
-   -- This comes directly from parser, no need to format.
-   lift (Plain content) =
-      [| Plain content |]
+instance Show HtmlAttributeValues where
+   show (AttributeValues values) =
+      show values
 
-   lift BreakingSpace =
-      [| BreakingSpace |]
-
-   lift (Style content) =
-      [| Style content |]
-
-   -- This is evaluated Haskell syntax that parser has not seen, need to format.
-   lift (Interpolation expression) =
-      appE [| formatHtmlContent |] expression
-
-
-instance Show HtmlAttributeValue where
-   show (Value content) =
-      show content
-
-   show (EventValue _) =
-      "{event}"
-
-   show (InterpolationValue _) =
+   show (InterpolationAttribute _) =
       "${..}"
 
-instance Eq HtmlAttributeValue where
-   (==) (Value lhs) (Value rhs) =
+instance Eq HtmlAttributeValues where
+   (==) (AttributeValues lhs) (AttributeValues rhs) =
       lhs == rhs
 
-   (==) (StyleValue lhs) (StyleValue rhs) =
-      lhs == rhs
-
-   (==) (EventValue _) (EventValue _) =
-      True
-
-   (==) (InterpolationValue _) (InterpolationValue _) =
+   (==) (InterpolationAttribute _) (InterpolationAttribute _) =
       True
 
    (==) _ _ =
       False
 
-instance Lift HtmlAttributeValue where
-   -- This comes directly from parser, no need to format.
-   lift (Value content) =
-      [| Value content |]
+instance Show HtmlAction where
+   show HtmlAction{} =
+      "{action}"
 
-   lift (StyleValue content) =
-      [| StyleValue content |]
-
-   lift (EventValue _) =
-      error "EventValues cannot be lifted"
-
-   -- This is evaluated Haskell syntax that parser has not seen, need to format.
-   lift (InterpolationValue expression) =
-      appE [| formatAttribute |] expression
+instance Eq HtmlAction where
+   (==) HtmlAction{} HtmlAction{} =
+      True
 
 
 runAction :: HtmlAction -> Event -> IO ()

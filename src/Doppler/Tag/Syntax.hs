@@ -8,7 +8,8 @@ import Text.Parsec.String     (Parser)
 import Control.Monad          (void)
 
 -- Generic tag structure parser.
-parseTag :: Parser TagName ->
+parseTag :: Monoid v =>
+            Parser TagName ->
             -- ^ Parser for tag names.
             Parser k ->
             -- ^ Parse for attribute keys.
@@ -18,7 +19,7 @@ parseTag :: Parser TagName ->
             -- ^ Parser for tag contents.
             Parser Char ->
             -- ^ Parser for whitespace characters.
-            Parser [Tag (k, [v]) c]
+            Parser [Tag (k, v) c]
             -- ^ Tag structure parser.
 parseTag tagName attrName attrValue content whitespace =
    many whitespace *> tag
@@ -54,7 +55,7 @@ parseTag tagName attrName attrValue content whitespace =
       endTagName =
          between (string "</") (char '>') (tagName <* many whitespace)
 
-parseAttribute :: Parser Char -> Parser k -> (Quote -> k -> Parser v) -> Parser (k, [v])
+parseAttribute :: Monoid v => Parser Char -> Parser k -> (Quote -> k -> Parser v) -> Parser (k, v)
 parseAttribute whitespace key value = do
    k <- key <* many whitespace
    equal <- optionMaybe $ char '=' <* many whitespace
@@ -63,7 +64,7 @@ parseAttribute whitespace key value = do
                     <|> between singleQuote singleQuote (many $ value SingleQuotes k)
                     <|> many (value Unquoted k))
               equal
-   return (k, v)
+   return (k, mconcat v)
    where
       singleQuote = char '\''
       doubleQuote = char '"'

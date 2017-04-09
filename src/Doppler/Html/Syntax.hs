@@ -53,7 +53,7 @@ parseAttributeName =
    -- Unicode.
    many1 $ noneOf " \0\"'>/=\n\r\t"
 
-parseAttributeValue :: Quote -> HtmlAttributeName -> Parser HtmlAttributeValue
+parseAttributeValue :: Quote -> HtmlAttributeName -> Parser HtmlAttributeValues
 parseAttributeValue Unquoted _ =
    -- Attribute value must not contain any literal ASCII whitespace, any
    -- U+0022 QUOTATION MARK characters ("), U+0027 APOSTROPHE characters
@@ -63,20 +63,20 @@ parseAttributeValue Unquoted _ =
    interpolation <|> value
    where
       interpolation =
-         InterpolationValue <$> parseInterpolationExpr
+         InterpolationAttribute <$> parseInterpolationExpr
 
       value =
-         Value <$> many1 (do
+         AttributeValues . pure . Value <$> many1 (do
             x <- optionMaybe (lookAhead $ string "${")
             maybe (noneOf " \"'=<>`") unexpected x)
 
 parseAttributeValue SingleQuotes "style" =
    -- Use CSS property parser when parsing style attribute value.
-   StyleValue <$> parseCssProperty
+   AttributeValues . pure . StyleValue <$> parseCssProperty
 
 parseAttributeValue DoubleQuotes "style" =
    -- Use CSS property parser when parsing style attribute value.
-   StyleValue <$> parseCssProperty
+   AttributeValues . pure . StyleValue <$> parseCssProperty
 
 parseAttributeValue SingleQuotes _ =
    -- Attribute value must not contain any literal U+0027 APOSTROPHE
@@ -84,10 +84,10 @@ parseAttributeValue SingleQuotes _ =
    interpolation <|> value
    where
       interpolation =
-         InterpolationValue <$> parseInterpolationExpr
+         InterpolationAttribute <$> parseInterpolationExpr
 
       value =
-         Value <$> many1 (do
+         AttributeValues . pure . Value <$> many1 (do
             x <- optionMaybe (lookAhead $ string "${")
             maybe (noneOf "'") unexpected x)
 
@@ -97,10 +97,10 @@ parseAttributeValue DoubleQuotes _ =
    interpolation <|> value
    where
       interpolation =
-         InterpolationValue <$> parseInterpolationExpr
+         InterpolationAttribute <$> parseInterpolationExpr
 
       value =
-         Value <$> many1 (do
+         AttributeValues . pure . Value <$> many1 (do
             x <- optionMaybe (lookAhead $ string "${")
             maybe (noneOf "\"") unexpected x)
 

@@ -53,80 +53,80 @@ spec = do
    describe "Attributes" $ do
       it "parses unquoted attribute for short closed root element" $
          parseHtmlFromString "<html key=value />" `shouldBe`
-            Html (ShortTag "html" [("key", [Value "value"])])
+            Html (ShortTag "html" [("key", AttributeValues [Value "value"])])
 
       it "parses unquoted attribute for dangling root element" $
          parseHtmlFromString "<html key=value/>" `shouldBe`
-            Html (DanglingTag "html" [("key", [Value "value/"])])
+            Html (DanglingTag "html" [("key", AttributeValues [Value "value/"])])
 
       it "parses single quoted attribute for short closed root element" $
          parseHtmlFromString "<html key='value\"s' />" `shouldBe`
-            Html (ShortTag "html" [("key", [Value "value\"s"])])
+            Html (ShortTag "html" [("key", AttributeValues [Value "value\"s"])])
 
       it "parses double quoted attribute for spaced short closed root element" $
          parseHtmlFromString "<html key=\"value's\" />" `shouldBe`
-            Html (ShortTag "html" [("key", [Value "value's"])])
+            Html (ShortTag "html" [("key", AttributeValues [Value "value's"])])
 
       it "parses empty attribute for spaced short closed root element" $
          parseHtmlFromString "<html key />" `shouldBe`
-            Html (ShortTag "html" [("key", [])])
+            Html (ShortTag "html" [("key", mempty)])
 
       it "parses multiple unquoted attribute for short closed root element" $
          parseHtmlFromString "<html key1=value1 key2=value2 />" `shouldBe`
-            Html (ShortTag "html" [("key1", [Value "value1"]), ("key2", [Value "value2"])])
+            Html (ShortTag "html" [("key1", AttributeValues [Value "value1"]), ("key2", AttributeValues [Value "value2"])])
 
       it "parses unquoted attribute for root element" $
          parseHtmlFromString "<html key=value></html>" `shouldBe`
-            Html (FullTag "html" [("key", [Value "value"])] [])
+            Html (FullTag "html" [("key", AttributeValues [Value "value"])] [])
 
       it "parses single quoted attribute for root element" $
          parseHtmlFromString "<html key='value'></html>" `shouldBe`
-            Html (FullTag "html" [("key", [Value "value"])] [])
+            Html (FullTag "html" [("key", AttributeValues [Value "value"])] [])
 
       it "parses double quoted attribute for root element" $
          parseHtmlFromString "<html key=\"value\"></html>" `shouldBe`
-            Html (FullTag "html" [("key", [Value "value"])] [])
+            Html (FullTag "html" [("key", AttributeValues [Value "value"])] [])
 
       it "parses single quoted empty attribute for root element" $
          parseHtmlFromString "<html key=''></html>" `shouldBe`
-            Html (FullTag "html" [("key", [])] [])
+            Html (FullTag "html" [("key", mempty)] [])
 
       it "parses double quoted empty attribute for root element" $
          parseHtmlFromString "<html key=\"\"></html>" `shouldBe`
-            Html (FullTag "html" [("key", [])] [])
+            Html (FullTag "html" [("key", mempty)] [])
 
       it "parses unquoted attribute interpolation for short closed root element" $
          parseHtmlFromString "<html key=${foo} />" `shouldBe`
-            Html (ShortTag "html" [("key", [InterpolationValue (lift "")])])
+            Html (ShortTag "html" [("key", InterpolationAttribute (lift ""))])
 
       it "parses unquoted attribute interpolation and values (post) for short closed root element" $
          parseHtmlFromString "<html key=${foo}bar />" `shouldBe`
-            Html (ShortTag "html" [("key", [InterpolationValue (lift ""), Value "bar"])])
+            Html (ShortTag "html" [("key", InterpolationAttribute (lift ""))])
 
       it "parses unquoted attribute interpolation and values (pre) for short closed root element" $
          parseHtmlFromString "<html key=bar${foo} />" `shouldBe`
-            Html (ShortTag "html" [("key", [Value "bar", InterpolationValue (lift "")])])
+            Html (ShortTag "html" [("key", InterpolationAttribute (lift ""))])
 
       it "parses unquoted attribute interpolation and does not mix it with values for short closed root element" $
          parseHtmlFromString "<html key=${foo} bar />" `shouldBe`
-            Html (ShortTag "html" [("key", [InterpolationValue (lift "")]), ("bar", [])])
+            Html (ShortTag "html" [("key", InterpolationAttribute (lift "")), ("bar", mempty)])
 
       it "parses single quoted interpolation attribute for short closed root element" $
          parseHtmlFromString "<html key='hello ${name}' />" `shouldBe`
-            Html (ShortTag "html" [("key", [Value "hello ", InterpolationValue (lift "")])])
+            Html (ShortTag "html" [("key", InterpolationAttribute (lift ""))])
 
       it "parses double quoted interpolation attribute for spaced short closed root element" $
          parseHtmlFromString "<html key=\"hello ${name}\" />" `shouldBe`
-            Html (ShortTag "html" [("key", [Value "hello ", InterpolationValue (lift "")])])
+            Html (ShortTag "html" [("key", InterpolationAttribute (lift ""))])
 
    describe "CSS integration" $ do
       it "parses CSS in style double quoted attribute for root element" $
          parseHtmlFromString "<html style=\"text-align: center;\" />" `shouldBe`
-            Html (ShortTag "html" [("style", [StyleValue $ Css.CssProperty ("text-align", [Css.Value "center"])])])
+            Html (ShortTag "html" [("style", AttributeValues [StyleValue $ Css.CssProperty ("text-align", [Css.Value "center"])])])
 
       it "parses CSS in style single quoted attribute for root element" $
          parseHtmlFromString "<html style='text-align: center;' />" `shouldBe`
-            Html (ShortTag "html" [("style", [StyleValue $ Css.CssProperty ("text-align", [Css.Value "center"])])])
+            Html (ShortTag "html" [("style", AttributeValues [StyleValue $ Css.CssProperty ("text-align", [Css.Value "center"])])])
 
       it "parses CSS style tag" $
          parseHtmlFromString "<style>div { text-align: center; }</style>" `shouldBe`
@@ -192,19 +192,23 @@ spec = do
 
       it "applies string interpolation for root element attribute" $
          let bar = "bar" in ([html|<html attr=foo${bar} />|] :: Html) `shouldBe`
-            Html (ShortTag "html" [("attr", [Value "foo", Value "bar"])])
+            Html (ShortTag "html" [("attr", AttributeValues [Value "foobar"])])
 
       it "applies string interpolation for root element attribute and quotes single quotes" $
          let bar = "bar's" in ([html|<html attr='${bar}' />|] :: Html) `shouldBe`
-            Html (ShortTag "html" [("attr", [Value "bar&apos;s"])])
+            Html (ShortTag "html" [("attr", AttributeValues [Value "bar&apos;s"])])
 
       it "applies string interpolation for root element attribute and quotes double quotes" $
          let bar = "he said \"get over it\"" in ([html|<html attr="${bar}" />|] :: Html) `shouldBe`
-            Html (ShortTag "html" [("attr", [Value "he said &quot;get over it&quot;"])])
+            Html (ShortTag "html" [("attr", AttributeValues [Value "he said &quot;get over it&quot;"])])
 
       it "applies style interpolation for root element unquoted style attribute" $
          let bar = StyleValue (Css.CssProperty ("font-size", [Css.Value "12px"])) in ([html|<html style=${bar} />|] :: Html) `shouldBe`
-            Html (ShortTag "html" [("style", [StyleValue $ Css.CssProperty ("font-size", [Css.Value "12px"])])])
+            Html (ShortTag "html" [("style", AttributeValues [StyleValue $ Css.CssProperty ("font-size", [Css.Value "12px"])])])
+
+      it "applies multiple style interpolation for root element unquoted style attribute" $
+         let stylesheet = [Css.CssProperty ("font-size", [Css.Value "12px"]), Css.CssProperty ("text-align", [Css.Value "center"])] in ([html|<html style=${stylesheet} />|] :: Html) `shouldBe`
+            Html (ShortTag "html" [("style", AttributeValues [StyleValue $ Css.CssProperty ("font-size", [Css.Value "12px"]), StyleValue $ Css.CssProperty ("text-align", [Css.Value "center"])])])
 
       it "applies multiline interpolation" $
          let content = "foobar" in ([html|
